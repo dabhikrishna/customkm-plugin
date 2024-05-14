@@ -7,6 +7,7 @@ jQuery(document).ready(function($) {
             url: custom_ajax_plugin_ajax_object.ajax_url,
             data: {
                 action: 'custom_ajax_plugin_update_store_name',
+                nonce: '<?php echo wp_create_nonce( "custom_ajax_plugin_ajax_nonce" ); ?>',
                 store_name: storeName
             },
             success: function(response) {
