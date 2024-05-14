@@ -13,6 +13,14 @@
  * PARTICULAR PURPOSE.
  */
 
+// Enqueue custom stylesheet
+function your_plugin_enqueue_styles() {
+	// Enqueue your stylesheet
+	wp_enqueue_style( 'your-plugin-styles', plugin_dir_url( __FILE__ ) . 'style.css' );
+}
+add_action( 'wp_enqueue_scripts', 'your_plugin_enqueue_styles' );
+
+
 // Add custom menu page
 function customkm_menu_page() {
 	add_menu_page(
@@ -380,11 +388,10 @@ function custom_ajax_plugin_settings_page() {
 	<div class="wrap">
 		<h2>Custom AJAX Plugin Settings</h2>
 		<form id="store-name-form">
-		<?php wp_nonce_field( 'custom_ajax_plugin_ajax_action', 'custom_ajax_plugin_ajax_nonce' ); ?>
-
 			<label for="store-name">Store Name:</label>
 			<input type="text" id="store-name" name="store_name" value="<?php echo esc_attr( get_option( 'store_name' ) ); ?>">
 			<input type="submit" value="Save">
+			<?php wp_nonce_field( 'save_store_name', 'store_name_nonce' ); ?> <!-- Add nonce field -->
 		</form>
 		<div id="store-name-result"></div>
 	</div>
@@ -394,6 +401,7 @@ function custom_ajax_plugin_settings_page() {
 add_action( 'admin_menu', 'custom_ajax_plugin_menu' );
 
 // Step 3: Implement AJAX for Dynamic Content
+
 
 function custom_ajax_plugin_ajax_handler() {
 	if ( isset( $_POST['store_name'] ) ) {
@@ -426,65 +434,83 @@ function custom_ajax_plugin_enqueue_scripts( $hook ) {
 
 add_action( 'admin_enqueue_scripts', 'custom_ajax_plugin_enqueue_scripts' );
 
-// Step 1: Create a shortcode
+// Enqueue jQuery in WordPress
+function enqueue_jquery() {
+	wp_enqueue_script( 'jquery' );
+}
+add_action( 'wp_enqueue_scripts', 'enqueue_jquery' );
+// Create shortcode for form
 function portfolio_submission_form_shortcode() {
 	ob_start();
 	?>
-	<form id="portfolio-submission-form" method="post">
-		<?php wp_nonce_field( 'portfolio_submission_form_action', 'portfolio_submission_form_nonce' ); ?>
+	<form id="portfolio_submission_form">
+		<input type="hidden" name="action" value="portfolio_submission">
+		<?php wp_nonce_field( 'portfolio_submission_nonce', 'portfolio_submission_nonce_field' ); ?>
 		<label for="name">Name:</label>
-		<input type="text" id="name" name="name"  autocomplete="name" required><br>
-		
+		<input type="text" id="name" name="name" required><br><br>
 		<label for="company_name">Company Name:</label>
-		<input type="text" id="company_name" name="company_name" autocomplete="on" ><br>
-		
+		<input type="text" id="company_name" name="company_name"><br><br>
 		<label for="email">Email:</label>
-		<input type="email" id="email" name="email" autocomplete="off" required><br>
-		
+		<input type="email" id="email" name="email" required><br><br>
 		<label for="phone">Phone:</label>
-		<input type="tel" id="phone" name="phone" autocomplete="phone" ><br>
-		
+		<input type="tel" id="phone" name="phone"><br><br>
 		<label for="address">Address:</label>
-		<textarea id="address" name="address" autocomplete="address"></textarea><br>
-		
-		<input type="submit" name="submit" value="Submit">
+		<textarea id="address" name="address"></textarea><br><br>
+		<input type="button" id="submit_btn" value="Submit">
 	</form>
+	<div id="response_msg"></div>
+	<script>
+		jQuery(document).ready(function ($) {
+	$('#submit_btn').on('click', function () {
+		var formData = $('#portfolio_submission_form').serialize();
+		$.ajax({
+			type: 'POST',
+			url: '<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>',
+			data: formData,
+			success: function (response) {
+				$('#response_msg').html(response);
+				$('#portfolio_submission_form')[0].reset(); // Reset the form
+			}
+		});
+	});
+});
+	</script>
 	<?php
 	return ob_get_clean();
 }
 add_shortcode( 'portfolio_submission_form', 'portfolio_submission_form_shortcode' );
-
-// Step 2: Handle form submission
-function handle_portfolio_submission() {
-	if ( isset( $_POST['submit'] ) ) {
-		if ( ! isset( $_POST['portfolio_submission_form_nonce'] ) || ! wp_verify_nonce( $_POST['portfolio_submission_form_nonce'], 'portfolio_submission_form_action' ) ) {
-			// Nonce verification failed
-			return;
-		}
-
-		$name         = sanitize_text_field( $_POST['name'] );
-		$company_name = sanitize_text_field( $_POST['company_name'] );
-		$email        = sanitize_email( $_POST['email'] );
-		$phone        = sanitize_text_field( $_POST['phone'] );
-		$address      = sanitize_textarea_field( $_POST['address'] );
-
-		// Create post object
-		$post_data = array(
-			'post_title'  => $name,
-			'post_type'   => 'portfolio',
-			'post_status' => 'publish',
-		);
-
-		// Insert the post into the database
-		$post_id = wp_insert_post( $post_data );
-
-		// Add post meta
-		if ( ! is_wp_error( $post_id ) ) {
-			update_post_meta( $post_id, 'company_name', $company_name );
-			update_post_meta( $post_id, 'email', $email );
-			update_post_meta( $post_id, 'phone', $phone );
-			update_post_meta( $post_id, 'address', $address );
+// Process form submission
+function process_portfolio_submission() {
+	if ( isset( $_POST['portfolio_submission_nonce_field'] ) && wp_verify_nonce( $_POST['portfolio_submission_nonce_field'], 'portfolio_submission_nonce' ) ) {
+		if ( isset( $_POST['name'] ) && isset( $_POST['email'] ) ) {
+			$name         = sanitize_text_field( $_POST['name'] );
+			$company_name = sanitize_text_field( $_POST['company_name'] );
+			$email        = sanitize_email( $_POST['email'] );
+			$phone        = sanitize_text_field( $_POST['phone'] );
+			$address      = sanitize_textarea_field( $_POST['address'] );
+			// Create post object
+			$portfolio_data = array(
+				'post_title'  => $name,
+				'post_type'   => 'portfolio',
+				'post_status' => 'publish',
+				'meta_input'  => array(
+					'client_name'  => $name,
+					'company_name' => $company_name,
+					'email'        => $email,
+					'phone'        => $phone,
+					'address'      => $address,
+				),
+			);
+			// Insert the post into the database
+			$post_id = wp_insert_post( $portfolio_data );
+			if ( is_wp_error( $post_id ) ) {
+				echo 'Error: ' . esc_html( $post_id->get_error_message() );
+			} else {
+				echo 'Success! Your portfolio has been submitted.';
+			}
 		}
 	}
+	die();
 }
-add_action( 'init', 'handle_portfolio_submission' );
+add_action( 'wp_ajax_portfolio_submission', 'process_portfolio_submission' );
+add_action( 'wp_ajax_nopriv_portfolio_submission', 'process_portfolio_submission' );
